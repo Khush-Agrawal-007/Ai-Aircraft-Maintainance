@@ -32,10 +32,13 @@ app = FastAPI(
     description="Simple API for aircraft engineering analytics and maintenance reporting",
 )
 
+configured_origins = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+allowed_origins = [origin.strip().rstrip("/") for origin in configured_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -52,6 +55,12 @@ def root() -> dict[str, str]:
 def health_check() -> dict[str, str]:
     """Simple health check endpoint for smoke testing."""
     return {"status": "ok", "service": "aircraft-maintenance-api"}
+
+
+@app.get("/health")
+def render_health_check() -> dict[str, str]:
+    """Health check endpoint used by Render."""
+    return {"status": "ok"}
 
 
 @app.post("/aircraft/analytics")
@@ -72,6 +81,9 @@ async def aircraft_analytics(
             status_code=400,
             detail="Please upload a valid Excel file (.xlsx or .xls).",
         )
+
+    if excel_file.size and excel_file.size > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Excel files must be 20 MB or smaller.")
 
     temp_path: str | None = None
 
